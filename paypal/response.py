@@ -1,9 +1,16 @@
 # coding=utf-8
 """
 PayPalResponse parsing and processing.
+
+Updated 2015-04-15 Jeffrey Shell: Changed PayPalResponse to be based on
+    abstract base class :class:`collections.Mapping` and to ensure that
+    `getattr` indicated the attribute name when raising AttributeError.
+    There are so many response values that are optional that its helpful
+    to know what is missing, or to use convenience methods like `.get`.
 """
 
 import logging
+from collections import Mapping
 from pprint import pformat
 
 from paypal.compat import is_py3
@@ -19,13 +26,16 @@ else:
 logger = logging.getLogger('paypal.response')
 
 
-class PayPalResponse(object):
+class PayPalResponse(Mapping):
     """
-    Parse and prepare the reponse from PayPal's API. Acts as somewhat of a
-    glorified dictionary for API responses.
+    Parse and prepare the reponse from PayPal's API. Acts as a read-only
+    dictionary that does the following:
 
-    NOTE: Don't access self.raw directly. Just do something like
-    PayPalResponse.someattr, going through PayPalResponse.__getattr__().
+    * Supports getting keys by upper or lower case (the raw response is all
+      upper case).
+    * Turns single-list-item values in the parsed response into Scalars
+      (in raw response, all values are lists).
+    * Provides attribute access to the response keys.
     """
     def __init__(self, query_string, config):
         """
@@ -45,7 +55,7 @@ class PayPalResponse(object):
 
     def __str__(self):
         """
-        Returns a string representation of the PayPalResponse object, in
+        Returns a string representation of the raw PayPalResponse object, in
         'pretty-print' format.
 
         :rtype: str
@@ -64,20 +74,12 @@ class PayPalResponse(object):
         :rtype: str
         :returns: The requested value from the API server's response.
         """
-        # PayPal response names are always uppercase.
-        key = key.upper()
         try:
-            value = self.raw[key]
-            if len(value) == 1:
-                # For some reason, PayPal returns lists for all of the values.
-                # I'm not positive as to why, so we'll just take the first
-                # of each one. Hasn't failed us so far.
-                return value[0]
-            return value
+            return self[key]
         except KeyError:
-            # The requested value wasn't returned in the response.
-            raise AttributeError(self)
+            raise AttributeError(key)
 
+    ## collections.Mapping just needs getitem, iter, and len support.
     def __getitem__(self, key):
         """
         Another (dict-style) means of accessing response data.
@@ -95,17 +97,14 @@ class PayPalResponse(object):
             # of each one. Hasn't failed us so far.
             return value[0]
         return value
-        
-    def items(self):
-        items_list = []
-        for key in self.raw.keys():
-            items_list.append((key, self.__getitem__(key)))
-        return items_list
-        
-    def iteritems(self):
-        for key in self.raw.keys():
-            yield (key, self.__getitem__(key))
 
+    def __iter__(self):
+        return iter(self.raw)
+
+    def __len__(self):
+        return len(self.raw)
+
+    @property
     def success(self):
         """
         Checks for the presence of errors in the response. Returns ``True`` if
@@ -116,4 +115,3 @@ class PayPalResponse(object):
         """
         return self.ack.upper() in (self.config.ACK_SUCCESS,
                                     self.config.ACK_SUCCESS_WITH_WARNING)
-    success = property(success)
