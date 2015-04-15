@@ -61,7 +61,20 @@ class PayPalResponse(Mapping):
         :rtype: str
         :returns: A 'pretty' string representation of the response dict.
         """
-        return pformat(self.raw)
+        return pformat(dict(self.items()))
+
+    def formatted(self):
+        """
+        Returns a formatted string representation of the response dictionary
+        with values flattened.
+        """
+        return pformat(dict(self.items()))
+
+    def __repr__(self):
+        return '<{module}.{classname} {items!r}>'.format(
+            module=self.__module__, classname=self.__class__.__name__,
+            items=dict(self.items()),
+        )
 
     def __getattr__(self, key):
         """
